@@ -707,9 +707,12 @@ do_open (const char *path, mode_t mode, struct fuse_file_info *finfo)
     {
       GRootFSData data = { 0 };
       int res;
+      struct fuse_context *ctx = fuse_get_context ();
 
       data.mode = mode & ST_MODE_PERM_MASK;
-      data.flags |= GROOTFS_FLAGS_MODE_SET;
+      data.uid = ctx->uid;
+      data.gid = ctx->gid;
+      data.flags = GROOTFS_FLAGS_MODE_SET | GROOTFS_FLAGS_UID_SET | GROOTFS_FLAGS_GID_SET;
 
       res = set_fake_dataf (fd, &data);
       if (res != 0)
