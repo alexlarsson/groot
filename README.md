@@ -1,4 +1,4 @@
-Groot is tool that uses modern kernel features to emulate running a
+Groot is a tool that uses modern kernel features to emulate running a
 process as root, without actually being root. It is similar to other
 tools like fakeroot or pseudo.
 
