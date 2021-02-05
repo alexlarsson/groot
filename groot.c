@@ -365,7 +365,7 @@ mount_fuse_fd_at (const char *mountpoint)
   if (dev_fuse_fd == -1)
     die_with_error ("Failed to open /dev/fuse");
 
-  mountopts = xasprintf ("fd=%i,rootmode=%o,user_id=%u,group_id=%u",
+  mountopts = xasprintf ("fd=%i,rootmode=%o,user_id=%u,group_id=%u,allow_other",
                          dev_fuse_fd, 0x4000, 0, 0);
 
   res = mount("fuse-grootfs", mountpoint, "fuse.fuse-grootfs", MS_NOSUID|MS_NODEV, mountopts);
