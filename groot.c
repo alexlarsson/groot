@@ -111,6 +111,9 @@ double_fork_with_socket (int *socket_out)
   if (pid2 != 0)
     exit (0);
 
+  if (setsid () == -1)
+    die_with_error ("setsid");
+
   close (status_sockets[0]);
 
   *socket_out = status_sockets[1];

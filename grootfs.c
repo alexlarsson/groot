@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <fuse.h>
 #include <fuse_lowlevel.h>
+#include <signal.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -1109,6 +1110,49 @@ dev_fuse_chan_new (int fd)
 }
 
 
+static struct fuse_session *fuse_instance;
+
+static void
+exit_handler (int sig)
+{
+  __debug__ (("grootfs got signal %d\n", sig));
+
+  (void) sig;
+  if (fuse_instance)
+    fuse_session_exit (fuse_instance);
+}
+
+static void
+set_one_signal_handler (int sig,
+                        void (*handler)(int),
+                        int remove)
+{
+  struct sigaction sa;
+  struct sigaction old_sa;
+
+  memset (&sa, 0, sizeof(struct sigaction));
+  sa.sa_handler = remove ? SIG_DFL : handler;
+  sigemptyset (&(sa.sa_mask));
+  sa.sa_flags = 0;
+
+  if (sigaction (sig, NULL, &old_sa) == -1)
+    die ("cannot get old signal handler");
+
+  if (old_sa.sa_handler == (remove ? handler : SIG_DFL) &&
+      sigaction (sig, &sa, NULL) == -1)
+    die("cannot set signal handler");
+}
+
+static void
+set_signal_handlers (struct fuse_session *se)
+{
+  set_one_signal_handler (SIGHUP, exit_handler, 0);
+  set_one_signal_handler (SIGINT, exit_handler, 0);
+  set_one_signal_handler (SIGTERM, exit_handler, 0);
+  set_one_signal_handler (SIGPIPE, SIG_IGN, 0);
+  fuse_instance = se;
+}
+
 int
 start_grootfs_lowlevel (int dirfd,
                         int dev_fuse,
@@ -1175,18 +1219,21 @@ start_grootfs_lowlevel (int dirfd,
   GRootFS *fs = new_grootfs (dirfd);
   struct fuse *fuse = fuse_new (ch, &args, &grootfs_oper, sizeof (grootfs_oper), fs);
 
-  res = fuse_set_signal_handlers (fuse_get_session (fuse));
-  if (res == -1)
-    die ("Failed to set fuse cleanup signal handlers");
+  set_signal_handlers (fuse_get_session (fuse));
 
   (void) write (status_pipes[1], &pipe_buf, 1);
 
   res = fuse_loop (fuse);
 
-  fuse_teardown (fuse, mountpoint);
+  /* Unmount even on failure */
+  fuse_unmount (mountpoint, ch);
 
   if (res == -1)
     die ("Error handling fuse requests");
+
+  fuse_destroy (fuse);
+
+  __debug__ (("exiting grootfs\n"));
 
   exit (0);
 }
