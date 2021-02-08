@@ -110,6 +110,31 @@ open_parent_dirfd (const char *path,
   return dirfd;
 }
 
+static char *
+get_proc_fd_path (int dirfd,
+                  const char *opt_file)
+{
+  if (opt_file)
+    return xasprintf ("/proc/self/fd/%d/%s", dirfd, opt_file);
+  else
+    return xasprintf ("/proc/self/fd/%d", dirfd);
+}
+
+/* Computes the real file pemissions for a a faked file.
+ * In order to correctly do things like set permissions and
+ * execute/search the files we set everything to rw for the user,
+ * r-only for rest. For dirs we always set x, and mirror the user x
+ * bit for other files. */
+static mode_t
+get_real_mode (int is_dir,
+               int executable_default)
+{
+  mode_t real_mode = S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR;
+  if (is_dir || executable_default)
+    real_mode |= S_IXUSR | S_IXGRP | S_IXOTH;
+  return real_mode;
+}
+
 typedef enum {
   GROOTFS_FLAGS_UID_SET = 1<<0,
   GROOTFS_FLAGS_GID_SET = 1<<1,
@@ -123,14 +148,38 @@ typedef struct {
   uint32_t mode;
 } GRootFSData;
 
-static char *
-get_proc_fd_path (int dirfd,
-                  const char *opt_file)
+static void
+fake_data_htonl (const GRootFSData *data,
+                 GRootFSData *data_dst)
 {
-  if (opt_file)
-    return xasprintf ("/proc/self/fd/%d/%s", dirfd, opt_file);
-  else
-    return xasprintf ("/proc/self/fd/%d", dirfd);
+  data_dst->flags = htonl (data->flags);
+  data_dst->mode = htonl (data->mode);
+  data_dst->uid = htonl (data->uid);
+  data_dst->gid = htonl (data->gid);
+}
+
+static void
+fake_data_ntohl (const GRootFSData *data,
+                 GRootFSData *data_dst)
+{
+  data_dst->flags = ntohl (data->flags);
+  data_dst->mode = ntohl (data->mode);
+  data_dst->uid = ntohl (data->uid);
+  data_dst->gid = ntohl (data->gid);
+}
+
+static void
+apply_fake_data (struct stat *st_data,
+                 const GRootFSData *data)
+{
+  if (data->flags & GROOTFS_FLAGS_UID_SET)
+    st_data->st_uid = data->uid;
+
+  if (data->flags & GROOTFS_FLAGS_GID_SET)
+    st_data->st_gid = data->gid;
+
+  if (data->flags & GROOTFS_FLAGS_MODE_SET)
+    st_data->st_mode = (st_data->st_mode & (~ST_MODE_PERM_MASK)) | (data->mode & ST_MODE_PERM_MASK);
 }
 
 static int
@@ -142,7 +191,7 @@ get_fake_data (int dirfd,
   autofree char *proc_file = get_proc_fd_path (dirfd, file);
   ssize_t res;
 
-  res = lgetxattr (proc_file, "user.grootfs", data, sizeof(GRootFSData));
+  res = lgetxattr (proc_file, "user.grootfs", data, sizeof (GRootFSData));
   if (res == -1)
     {
       int errsv = errno;
@@ -171,17 +220,14 @@ get_fake_data (int dirfd,
       return -ERANGE;
     }
 
-  data->flags = ntohl(data->flags);
-  data->mode = ntohl(data->mode);
-  data->uid = ntohl(data->uid);
-  data->gid = ntohl(data->gid);
+  fake_data_ntohl (data, data);
 
   return 0;
 }
 
 static int
 get_fake_dataf (int fd,
-               GRootFSData *data)
+                GRootFSData *data)
 {
   ssize_t res;
 
@@ -213,10 +259,7 @@ get_fake_dataf (int fd,
       return -ERANGE;
     }
 
-  data->flags = ntohl(data->flags);
-  data->mode = ntohl(data->mode);
-  data->uid = ntohl(data->uid);
-  data->gid = ntohl(data->gid);
+  fake_data_ntohl (data, data);
 
   return 0;
 }
@@ -224,30 +267,31 @@ get_fake_dataf (int fd,
 static int
 set_fake_data (int dirfd,
                const char *file,
-               int allow_noent,
-               GRootFSData *data)
+               int ensure_exist,
+               const GRootFSData *data)
 {
   autofree char *proc_file = get_proc_fd_path (dirfd, file);
   ssize_t res;
   GRootFSData data2;
 
-  data2.flags = htonl(data->flags);
-  data2.mode = htonl(data->mode);
-  data2.uid = htonl(data->uid);
-  data2.gid = htonl(data->gid);
+  fake_data_htonl (data, &data2);
+
+  if (ensure_exist)
+    {
+      int fd = openat (dirfd, file, O_CREAT | O_EXCL | O_WRONLY, 0666);
+      if (fd == -1)
+        {
+          if (errno != EEXIST)
+            return -errno;
+        }
+
+      close (fd);
+    }
 
   res = lsetxattr (proc_file, "user.grootfs", &data2, sizeof(GRootFSData), 0);
   if (res == -1)
     {
       int errsv = errno;
-
-      if (errsv == EPERM)
-        {
-          /* Symlinks cannot store user xattrs, so we don't store extra data for these */
-          report ("Ignoring setxattr failing on symlink");
-          return 0;
-        }
-
       report ("Internal error: lsetxattr %s returned %s", file, strerror (errsv));
       return -errsv;
     }
@@ -257,28 +301,17 @@ set_fake_data (int dirfd,
 
 static int
 set_fake_dataf (int fd,
-                GRootFSData *data)
+                const GRootFSData *data)
 {
   ssize_t res;
   GRootFSData data2;
 
-  data2.flags = htonl(data->flags);
-  data2.mode = htonl(data->mode);
-  data2.uid = htonl(data->uid);
-  data2.gid = htonl(data->gid);
+  fake_data_htonl (data, &data2);
 
   res = fsetxattr (fd, "user.grootfs", &data2, sizeof(GRootFSData), 0);
   if (res == -1)
     {
       int errsv = errno;
-
-      if (errsv == EPERM)
-        {
-          /* Symlinks cannot store user xattrs, so we don't store extra data for these */
-          report ("Ignoring setxattr failing on symlink");
-          return 0;
-        }
-
       report ("Internal error: fsetxattr %d returned %s", fd, strerror (errsv));
       return -errsv;
     }
@@ -286,31 +319,129 @@ set_fake_dataf (int fd,
   return 0;
 }
 
+typedef struct {
+  const char *path;
+  int fd;
+  int dirfd;
+  char *basename;
+  char *datafile;
+  bool exists;
+  struct stat st_data;
+  GRootFSData fake_data;
+} GRootPathInfo;
+
+#define GROOT_PATH_INFO_INIT { NULL, -1, -1 }
+
+static void
+groot_path_info_cleanup (GRootPathInfo *info)
+{
+  if (info->dirfd != -1)
+    close (info->dirfd);
+
+  if (info->basename)
+    free (info->basename);
+
+  if (info->datafile)
+    free (info->datafile);
+}
+
+DEFINE_AUTO_CLEANUP_CLEAR_FUNC(GRootPathInfo, groot_path_info_cleanup);
+
+static int
+_groot_path_info_init_base (GRootPathInfo *info, bool allow_noent)
+{
+  info->exists = TRUE;
+
+  if (S_ISLNK (info->st_data.st_mode))
+    {
+      GRootFS *fs = get_grootfs ();
+      info->datafile = xasprintf (".groot.symlink.%lx_%lx",
+                                  info->st_data.st_dev, info->st_data.st_ino);
+
+      if (get_fake_data (fs->basefd, info->datafile, TRUE, &info->fake_data) != 0)
+        return -EIO;
+    }
+  else if (info->fd != -1)
+    {
+      if (get_fake_dataf (info->fd, &info->fake_data) != 0)
+        return -EIO;
+    }
+  else
+    {
+      if (get_fake_data (info->dirfd, info->basename, allow_noent, &info->fake_data) != 0)
+        return -EIO;
+    }
+
+  apply_fake_data (&info->st_data, &info->fake_data);
+
+  return 0;
+}
+
+static int
+groot_path_info_init_path (GRootPathInfo *info, const char *path, bool allow_noent)
+{
+  info->path = ensure_relpath (path);
+  info->dirfd = open_parent_dirfd (info->path, &info->basename);
+  if (info->dirfd < 0)
+    return -errno;
+
+  if (fstatat (info->dirfd, info->basename, &info->st_data, AT_SYMLINK_NOFOLLOW) == -1)
+    {
+      if (allow_noent)
+        return 0;
+
+      return -errno;
+    }
+
+  return _groot_path_info_init_base (info, allow_noent);
+}
+
+static int
+groot_path_info_init_fd (GRootPathInfo *info, int fd)
+{
+  info->fd = fd;
+
+  if (fstat (info->fd, &info->st_data) == -1)
+    return -errno;
+
+  return _groot_path_info_init_base (info, FALSE);
+}
+
+static int
+groot_path_info_update_data (GRootPathInfo *info)
+{
+  assert (info->exists); // TODO: Later handle non-exist for e.g. symlinks
+
+  if (info->datafile) /* A symlink with separate data file, could be path *or* fd backed */
+    {
+      GRootFS *fs = get_grootfs ();
+      if (set_fake_data (fs->basefd, info->datafile, TRUE, &info->fake_data) != 0)
+        return -EIO;
+    }
+  else if (info->fd != -1)
+    {
+      if (set_fake_dataf (info->fd, &info->fake_data) != 0)
+        return -EIO;
+    }
+  else
+    {
+      if (set_fake_data (info->dirfd, info->basename, FALSE, &info->fake_data) != 0)
+        return -EIO;
+    }
+}
+
 static int
 grootfs_getattr (const char *path, struct stat *st_data)
 {
   __debug__ (("getattr %s\n", path));
 
-  GRootFSData data = { 0 };
-  autofree char *basename = NULL;
-  autofd int dirfd = open_parent_dirfd (path, &basename);
-  if (dirfd < 0)
-    return dirfd;
+  int res;
+  auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
+  res = groot_path_info_init_path (&info, path, FALSE);
+  if (res != 0)
+    return res;
 
-  if (fstatat(dirfd, basename, st_data, AT_SYMLINK_NOFOLLOW) == -1)
-    return -errno;
-
-  if (get_fake_data (dirfd, basename, TRUE, &data) != 0)
-    return -EIO;
-
-  if (data.flags & GROOTFS_FLAGS_UID_SET)
-    st_data->st_uid = data.uid;
-
-  if (data.flags & GROOTFS_FLAGS_GID_SET)
-    st_data->st_gid = data.gid;
-
-  if (data.flags & GROOTFS_FLAGS_MODE_SET)
-    st_data->st_mode = (st_data->st_mode & (~ST_MODE_PERM_MASK)) | (data.mode & ST_MODE_PERM_MASK);
+  *st_data = info.st_data;
 
   return 0;
 }
@@ -320,62 +451,13 @@ grootfs_fgetattr (const char *path, struct stat *st_data, struct fuse_file_info 
 {
   __debug__ (("fgetattr %s\n", path));
 
-  GRootFSData data = { 0 };
-  autofree char *basename = NULL;
-  autofd int dirfd = open_parent_dirfd (path, &basename);
-  if (dirfd < 0)
-    return dirfd;
-
-  if (fstat(fi->fh, st_data) == -1)
-    return -errno;
-
-  if (get_fake_dataf (fi->fh, &data) != 0)
-    return -EIO;
-
-  if (data.flags & GROOTFS_FLAGS_UID_SET)
-    st_data->st_uid = data.uid;
-
-  if (data.flags & GROOTFS_FLAGS_GID_SET)
-    st_data->st_gid = data.gid;
-
-  if (data.flags & GROOTFS_FLAGS_MODE_SET)
-    st_data->st_mode = (st_data->st_mode & (~ST_MODE_PERM_MASK)) | (data.mode & ST_MODE_PERM_MASK);
-
-  return 0;
-}
-
-/* In order to correctly do things like set permissions and
- * execute/search the files we set everything to rw for the user,
- * r-only for rest. For dirs we always set x, and mirror the user x
- * bit for other files. */
-static mode_t
-get_real_mode (int is_dir,
-               int executable_default)
-{
-  mode_t real_mode = S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR;
-  if (is_dir || executable_default)
-    real_mode |= S_IXUSR | S_IXGRP | S_IXOTH;
-  return real_mode;
-}
-
-static int
-set_fake_chmod (int dirfd,
-               const char *basename,
-               mode_t mode)
-{
   int res;
-  GRootFSData data = { 0 };
-
-  res = get_fake_data (dirfd, basename, FALSE, &data);
+  auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
+  res = groot_path_info_init_fd (&info, fi->fh);
   if (res != 0)
     return res;
 
-  data.mode = mode & ST_MODE_PERM_MASK;
-  data.flags |= GROOTFS_FLAGS_MODE_SET;
-
-  res = set_fake_data (dirfd, basename, FALSE, &data);
-  if (res != 0)
-    return res;
+  *st_data = info.st_data;
 
   return 0;
 }
@@ -385,19 +467,13 @@ grootfs_chmod (const char *path, mode_t mode)
 {
   __debug__ (("chmod %s %x\n", path, mode));
 
-  mode_t real_mode;
-  struct stat st_data;
   int res;
+  auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
+  res = groot_path_info_init_path (&info, path, FALSE);
+  if (res != 0)
+    return res;
 
-  autofree char *basename = NULL;
-  autofd int dirfd = open_parent_dirfd (path, &basename);
-  if (dirfd < 0)
-    return dirfd;
-
-  if (fstatat (dirfd, basename, &st_data, AT_SYMLINK_NOFOLLOW) == -1)
-    return -errno;
-
-  real_mode = get_real_mode (S_ISDIR (st_data.st_mode), (mode & S_IXUSR) != 0);
+  mode_t real_mode = get_real_mode (S_ISDIR (info.st_data.st_mode), (mode & S_IXUSR) != 0);
 
   /* For permissions like execute to work for others, we set all the
      permissions, to the users perms and strip out any extra perms. */
@@ -405,11 +481,15 @@ grootfs_chmod (const char *path, mode_t mode)
   /* Note we can't use AT_SYMLINK_NOFOLLOW yet;
    * https://marc.info/?l=linux-kernel&m=148830147803162&w=2
    * https://marc.info/?l=linux-fsdevel&m=149193779929561&w=2
+   * Fuse always resolves the symlink and calls us on the target
    */
-  if (fchmodat (dirfd, basename, real_mode, 0) != 0)
+  if (fchmodat (info.dirfd, info.basename, real_mode, 0) != 0)
     return -errno;
 
-  res = set_fake_chmod (dirfd, basename, mode);
+  info.fake_data.mode = mode & ST_MODE_PERM_MASK;
+  info.fake_data.flags |= GROOTFS_FLAGS_MODE_SET;
+
+  res = groot_path_info_update_data (&info);
   if (res != 0)
     return res;
 
@@ -420,31 +500,26 @@ static int
 grootfs_chown (const char *path, uid_t uid, gid_t gid)
 {
   __debug__ (("chown %s to %d %d\n", path, uid, gid));
-  GRootFSData data = { 0 };
+
   int res;
-
-  autofree char *basename = NULL;
-  autofd int dirfd = open_parent_dirfd (path, &basename);
-  if (dirfd < 0)
-    return dirfd;
-
-  res = get_fake_data (dirfd, basename, FALSE, &data);
+  auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
+  res = groot_path_info_init_path (&info, path, FALSE);
   if (res != 0)
-    return res; /* This handles the ENOENT case */
+    return res;
 
   if (uid != -1)
     {
-      data.uid = uid;
-      data.flags |= GROOTFS_FLAGS_UID_SET;
+      info.fake_data.uid = uid;
+      info.fake_data.flags |= GROOTFS_FLAGS_UID_SET;
     }
 
   if (gid != -1)
     {
-      data.gid = gid;
-      data.flags |= GROOTFS_FLAGS_GID_SET;
+      info.fake_data.gid = gid;
+      info.fake_data.flags |= GROOTFS_FLAGS_GID_SET;
     }
 
-  res = set_fake_data (dirfd, basename, FALSE, &data);
+  res = groot_path_info_update_data (&info);
   if (res != 0)
     return res;
 
@@ -506,6 +581,10 @@ grootfs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
   while ((de = readdir (dp)) != NULL)
     {
       struct stat st;
+
+      if (has_prefix (de->d_name, ".groot."))
+        continue;
+
       memset (&st, 0, sizeof (st));
       st.st_ino = de->d_ino;
       // TODO: Ensure right mode if fake devnode/socket
@@ -529,25 +608,30 @@ grootfs_mknod (const char *path, mode_t mode, dev_t rdev)
 static int
 grootfs_mkdir (const char *path, mode_t mode)
 {
-  GRootFS *fs = get_grootfs ();
-  mode_t real_mode;
-  int res;
-
   __debug__ (("mkdir %s %x\n", path, mode));
 
+  int res;
   autofree char *basename = NULL;
   autofd int dirfd = open_parent_dirfd (path, &basename);
   if (dirfd < 0)
     return dirfd;
 
-  path = ensure_relpath (path);
+  mode_t real_mode = get_real_mode (TRUE, FALSE);
 
-  real_mode = get_real_mode (TRUE, FALSE);
-
-  if (mkdirat (fs->basefd, path, real_mode) == -1)
+  if (mkdirat (dirfd, basename, real_mode) == -1)
     return -errno;
 
-  res = set_fake_chmod (dirfd, basename, mode);
+  /* mkdir succeeded, so its guaranteed to be a not-previously
+     existing dir, just set the fake data */
+  GRootFSData data = { 0 };
+  struct fuse_context *ctx = fuse_get_context ();
+
+  data.mode = mode & ST_MODE_PERM_MASK;
+  data.uid = ctx->uid;
+  data.gid = ctx->gid;
+  data.flags = GROOTFS_FLAGS_MODE_SET | GROOTFS_FLAGS_UID_SET | GROOTFS_FLAGS_GID_SET;
+
+  res = set_fake_data (dirfd, basename, FALSE, &data);
   if (res != 0)
     return res;
 
@@ -557,14 +641,24 @@ grootfs_mkdir (const char *path, mode_t mode)
 static int
 grootfs_unlink (const char *path)
 {
-  GRootFS *fs = get_grootfs ();
-
   __debug__ (("unlink %s\n", path));
 
-  path = ensure_relpath (path);
+  int res;
+  auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
+  res = groot_path_info_init_path (&info, path, FALSE);
+  if (res != 0)
+    return res;
 
-  if (unlinkat (fs->basefd, path, 0) == -1)
+  if (unlinkat (info.dirfd, info.basename, 0) == -1)
     return -errno;
+
+  /* When unlinking a symlink, also unlink symlink datafile.
+   * This should be fine because we can't hardlink symlinks, so its the last reference. */
+  if (info.datafile)
+    {
+      GRootFS *fs = get_grootfs ();
+      unlinkat (fs->basefd, info.datafile, 0);
+    }
 
   return 0;
 }
@@ -587,12 +681,26 @@ static int
 grootfs_symlink (const char *from, const char *to)
 {
   GRootFS *fs = get_grootfs ();
+  int res;
 
   __debug__ (("symlink  %s %s\n", from, to));
   to = ensure_relpath (to);
 
   if (symlinkat (from, fs->basefd, to) == -1)
     return -errno;
+
+  /* We created a new symlink file, set default ownership */
+  auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
+  if (groot_path_info_init_path (&info, to, FALSE) == 0)
+    {
+      struct fuse_context *ctx = fuse_get_context ();
+
+      info.fake_data.uid = ctx->uid;
+      info.fake_data.gid = ctx->gid;
+      info.fake_data.flags = GROOTFS_FLAGS_UID_SET | GROOTFS_FLAGS_GID_SET;
+
+      groot_path_info_update_data (&info);
+    }
 
   return 0;
 }
@@ -810,6 +918,7 @@ grootfs_access (const char *path, int mode)
    */
   if (faccessat (fs->basefd, path, mode, AT_SYMLINK_NOFOLLOW) == -1)
     return -errno;
+
   return 0;
 }
 
