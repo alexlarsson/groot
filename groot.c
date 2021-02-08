@@ -310,6 +310,15 @@ usage (const char *progname)
 
 int opt_got_command = FALSE;
 
+static void
+add_wrap_dir (struct groot_config *conf,
+              const char *path)
+{
+  conf->num_wrapdirs++;
+  conf->wrapdirs = xrealloc (conf->wrapdirs, conf->num_wrapdirs * sizeof (WrapDir));
+  conf->wrapdirs[conf->num_wrapdirs-1].path = xstrdup (path);
+}
+
 static int
 groot_opt_proc (void *data,
                 const char *arg,
@@ -333,9 +342,7 @@ groot_opt_proc (void *data,
       exit (EXIT_SUCCESS);
 
     case KEY_WRAP:
-      conf->num_wrapdirs++;
-      conf->wrapdirs = xrealloc (conf->wrapdirs, conf->num_wrapdirs * sizeof (WrapDir));
-      conf->wrapdirs[conf->num_wrapdirs-1].path = xstrdup (arg + 2);
+      add_wrap_dir (conf, arg + 2);
       return 0;
 
     default:
@@ -396,6 +403,7 @@ main (int argc, char *argv[])
   struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
   struct groot_config conf = { 0 };
   char buf = 'x';
+  const char *env_wrap = NULL;
 
   res = fuse_opt_parse (&args, &conf, groot_opts, groot_opt_proc);
   if (res != 0)
@@ -410,6 +418,19 @@ main (int argc, char *argv[])
       fprintf (stderr, "No command specified\n");
       fprintf (stderr, "see `%s -h' for usage\n", argv[0]);
       exit (EXIT_FAILURE);
+    }
+
+  env_wrap = getenv ("GROOT_WRAPFS");
+  if (env_wrap)
+    {
+      autofree char *data = xstrdup (env_wrap);
+      char *iterator = data;
+
+      while (iterator)
+        {
+          char *path = strsep (&iterator, ":");
+          add_wrap_dir (&conf, path);
+        }
     }
 
   real_uid = getuid ();
