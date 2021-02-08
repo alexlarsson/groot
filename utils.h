@@ -32,12 +32,15 @@
 
 #define TRUE 1
 #define FALSE 0
+typedef int bool;
 
 #ifdef DEBUGLOG
 #define __debug__(x) printf x
 #else
 #define __debug__(x)
 #endif
+
+#define UNUSED __attribute__((__unused__))
 
 #define N_ELEMENTS(arr) (sizeof (arr) / sizeof ((arr)[0]))
 
@@ -126,6 +129,22 @@ cleanup_freep (void *p)
     free (*pp);
 }
 
-#define autofd __attribute__((cleanup(cleanup_fdp)))
-#define autofree __attribute__((cleanup(cleanup_freep)))
-#define autofreev __attribute__((cleanup (cleanup_strvp)))
+#define _CLEANUP(func)               __attribute__((cleanup(func)))
+
+#define autofd _CLEANUP(cleanup_fdp)
+#define autofree _CLEANUP(cleanup_freep)
+#define autofreev _CLEANUP(cleanup_strvp)
+
+#define _AUTOPTR_FUNC_NAME(TypeName) _autoptr_cleanup_##TypeName
+#define _AUTO_FUNC_NAME(TypeName)    _auto_cleanup_##TypeName
+#define _AUTOPTR_TYPENAME(TypeName)  TypeName##_autoptr
+
+#define DEFINE_AUTOPTR_CLEANUP_FUNC(TypeName, func)                     \
+  typedef TypeName *_AUTOPTR_TYPENAME(TypeName);                        \
+  static inline void _AUTOPTR_FUNC_NAME(TypeName) (TypeName **_ptr) { if (*_ptr) (func) (*_ptr); }
+
+#define DEFINE_AUTO_CLEANUP_CLEAR_FUNC(TypeName, func)                  \
+  static inline void _AUTO_FUNC_NAME(TypeName) (TypeName *_ptr) { (func) (_ptr); }
+
+#define autoptr(TypeName) _CLEANUP(_AUTOPTR_FUNC_NAME(TypeName)) _AUTOPTR_TYPENAME(TypeName)
+#define auto(TypeName) _CLEANUP(_AUTO_FUNC_NAME(TypeName)) TypeName
