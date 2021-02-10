@@ -4,6 +4,28 @@
 #include "utils.h"
 #include "groot-ns.h"
 
+/* For some reason the regular unsetenv doesn't seem to work well in an initializer... */
+static void
+__unsetenv (const char *name)
+{
+  size_t len = strlen (name);
+  char **ep;
+
+  ep = __environ;
+  while (*ep != NULL)
+    {
+      if (strncmp (*ep, name, len) == 0 && (*ep)[len] == '=')
+        {
+          char **dp = ep;
+          do
+            dp[0] = dp[1];
+          while (*dp++);
+        }
+      else
+        ++ep;
+    }
+}
+
 static void
 _groot_init_main (int argc, char *argv[])
 {
@@ -32,8 +54,8 @@ _groot_init_main (int argc, char *argv[])
     }
 
   /* Don't recursively enable groot */
-  unsetenv ("LD_PRELOAD");
-  unsetenv ("GROOT_ENABLE");
+  __unsetenv ("LD_PRELOAD");
+  __unsetenv ("GROOT_ENABLE");
 
   groot_setup_ns ((const char **)wrapdirs, num_wrapdirs);
   strfreev (wrapdirs);
