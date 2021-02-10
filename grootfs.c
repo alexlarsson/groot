@@ -428,6 +428,8 @@ groot_path_info_update_data (GRootPathInfo *info)
       if (set_fake_data (info->dirfd, info->basename, FALSE, &info->fake_data) != 0)
         return -EIO;
     }
+
+  return 0;
 }
 
 static int
@@ -681,7 +683,6 @@ static int
 grootfs_symlink (const char *from, const char *to)
 {
   GRootFS *fs = get_grootfs ();
-  int res;
 
   __debug__ (("symlink  %s %s\n", from, to));
   to = ensure_relpath (to);
@@ -1265,10 +1266,10 @@ set_signal_handlers (struct fuse_session *se)
 int
 start_grootfs_lowlevel (int dirfd,
                         int dev_fuse,
-                        char *mountpoint)
+                        const char *mountpoint)
 {
-  char *argv[] = { mountpoint };
-  struct fuse_args args = FUSE_ARGS_INIT(N_ELEMENTS (argv), argv);
+  const char *argv[] = { mountpoint };
+  struct fuse_args args = FUSE_ARGS_INIT(N_ELEMENTS (argv), (char **)argv);
   int status_pipes[2];
   char pipe_buf = 'x';
   pid_t pid;

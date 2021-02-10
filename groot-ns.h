@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Alexander Larsson <alexl@redhat.com>
+ * Copyright (C) 2021 Alexander Larsson <alexl@redhat.com>
  *
  * SPDX-License-Identifier: LGPL-2.0+
  *
@@ -19,10 +19,5 @@
  * Boston, MA 02111-1307, USA.
  */
 
-int start_grootfs          (int         argc,
-                            char       *argv[],
-                            int         dirfd);
-int start_grootfs_lowlevel (int         dirfd,
-                            int         dev_fuse,
-                            const char *mountpoint);
-
+int groot_setup_ns (const char **wrapdirs,
+                    int          num_wrapdirs);
