@@ -29,14 +29,9 @@ __unsetenv (const char *name)
 static void
 _groot_init_main (int argc, char *argv[])
 {
-  const char *enable;
   const char *env_wrap = NULL;
   char **wrapdirs = NULL;
   int num_wrapdirs = 0;
-
-  enable = getenv ("GROOT_ENABLE");
-  if (enable == NULL || *enable == 0)
-    return;
 
   env_wrap = getenv ("GROOT_WRAPFS");
   if (env_wrap)
@@ -55,7 +50,6 @@ _groot_init_main (int argc, char *argv[])
 
   /* Don't recursively enable groot */
   __unsetenv ("LD_PRELOAD");
-  __unsetenv ("GROOT_ENABLE");
 
   groot_setup_ns ((const char **)wrapdirs, num_wrapdirs);
   strfreev (wrapdirs);
