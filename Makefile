@@ -14,7 +14,7 @@ groot: groot.c grootfs.c grootfs.h groot-ns.c groot-ns.h utils.h utils.c
 		groot.c grootfs.c groot-ns.c utils.c \
 		-o groot
 
-libgroot.so: groot-preload.c utils.h utils.c
+libgroot.so: groot-preload.c grootfs.c grootfs.h groot-ns.c groot-ns.h utils.h utils.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(GROOT_CFLAGS)  $(FUSE_FLAGS) \
 		groot-preload.c grootfs.c  groot-ns.c utils.c \
 		-fvisibility=hidden -Bsymbolic-functions -Bgroup -fPIC -shared -o libgroot.so
