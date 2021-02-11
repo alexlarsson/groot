@@ -254,7 +254,7 @@ make_idmap (const char *username, const char *filename, long base_id)
           colon = strchr (line, ':');
           if (colon == NULL)
             {
-              report ("WARNING: Invalid format of %s\n", filename);
+              report ("WARNING: Invalid format of %s", filename);
               continue; // Error parsing int
             }
           *colon = 0;
@@ -262,14 +262,14 @@ make_idmap (const char *username, const char *filename, long base_id)
           long subid_base = strtol (line, &end, 10);
           if (*end != 0)
             {
-              report ("WARNING: Invalid format of %s\n", filename);
+              report ("WARNING: Invalid format of %s", filename);
               continue; // Error parsing int
             }
 
           long subid_count = strtol (colon + 1, &end, 10);
           if (*end != 0)
             {
-              report ("WARNING: Invalid format of %s\n", filename);
+              report ("WARNING: Invalid format of %s", filename);
               continue; // Error parsing int
             }
 
@@ -283,7 +283,7 @@ make_idmap (const char *username, const char *filename, long base_id)
     }
 
   if (next_id == 1)
-    report ("Warning: no defined ids for user %s in %s, limited user/group support\n", username, filename);
+    report ("Warning: no defined ids for user %s in %s, limited user/group support", username, filename);
 
   return steal_pointer (&mapping);
 }
