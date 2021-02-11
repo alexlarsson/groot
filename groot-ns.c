@@ -330,9 +330,15 @@ groot_setup_ns (const char **wrapdirs, int num_wrapdirs)
   real_gid = getgid ();
   main_pid = getpid ();
 
-  passwd = getpwuid (real_uid);
-  if (passwd != NULL)
-    username = xstrdup (passwd->pw_name);
+
+  /* Avoid calling getpwuid() and thus nss, etc in a preload init constructor if possible */
+  username = getenv ("GROOT_USER");
+  if (username == NULL)
+    {
+      passwd = getpwuid (real_uid);
+      if (passwd != NULL)
+        username = xstrdup (passwd->pw_name);
+    }
 
   uid_mapping = make_idmap (username, "/etc/subuid", real_uid);
   gid_mapping = make_idmap (username, "/etc/subgid", real_gid);
