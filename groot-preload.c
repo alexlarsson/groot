@@ -30,8 +30,20 @@ static void
 _groot_init_main (int argc, char *argv[])
 {
   const char *env_wrap = NULL;
+  const char *disabled = NULL;
   char **wrapdirs = NULL;
   int num_wrapdirs = 0;
+
+  disabled = getenv ("GROOT_DISABLED");
+
+  /* Don't recursively enable groot */
+  __unsetenv ("LD_PRELOAD");
+
+  if (disabled != NULL)
+    return;
+
+  /* Even if something sets LD_PRELOAD in the groot namespace, disable it */
+  setenv ("GROOT_DISABLED", "1", 1);
 
   env_wrap = getenv ("GROOT_WRAPFS");
   if (env_wrap)
@@ -48,8 +60,6 @@ _groot_init_main (int argc, char *argv[])
         }
     }
 
-  /* Don't recursively enable groot */
-  __unsetenv ("LD_PRELOAD");
 
   groot_setup_ns ((const char **)wrapdirs, num_wrapdirs);
   strfreev (wrapdirs);
