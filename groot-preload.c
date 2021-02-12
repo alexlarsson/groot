@@ -35,6 +35,7 @@ _groot_init_main (int argc, char *argv[])
   int num_wrapdirs = 0;
 
   disabled = getenv ("GROOT_DISABLED");
+  env_wrap = getenv ("GROOT_WRAPFS");
 
   /* Don't recursively enable groot */
   __unsetenv ("LD_PRELOAD");
@@ -43,9 +44,9 @@ _groot_init_main (int argc, char *argv[])
     return;
 
   /* Even if something sets LD_PRELOAD in the groot namespace, disable it */
-  setenv ("GROOT_DISABLED", "1", 1);
+  if (disabled == NULL)
+    setenv ("GROOT_DISABLED", "1", 1);
 
-  env_wrap = getenv ("GROOT_WRAPFS");
   if (env_wrap)
     {
       autofree char *data = xstrdup (env_wrap);
