@@ -217,7 +217,10 @@ keep_caps (void)
     {
       if ((effective & (1 << cap)) &&
           prctl (PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, cap, 0, 0) != 0)
-        die_with_error ("Adding ambient capability %ld", cap);
+       {
+         if (errno != EINVAL)
+           die_with_error ("Adding ambient capability %ld", cap);
+       }
     }
 }
 
