@@ -150,6 +150,8 @@ start_fuse_process (const char **wrapdirs,
   int *wrapdir_fds;
 
   wrapdir_fds = xmalloc (sizeof (int) * num_wrapdirs);
+  for (int i = 0; i < num_wrapdirs; i++)
+    wrapdir_fds[i] = -1;
 
   /* We do the opens before forking for nicer error reporting */
   for (int i = 0; i < num_wrapdirs; i++)
@@ -158,14 +160,15 @@ start_fuse_process (const char **wrapdirs,
 
       wrapdir_fds[i] = openat (AT_FDCWD, wrapdir, O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
       if (wrapdir_fds[i] == -1)
-        die_with_error ("Failed to open wrapped dir %s", wrapdir);
+        wrapdirs[i] = NULL; /* Ensure we don't try to mount this */
     }
 
   if (double_fork_with_socket (&status_socket) != 0)
     {
       /* Close dirfds in parent */
       for (int i = 0; i < num_wrapdirs; i++)
-        close (wrapdir_fds[i]);
+        if (wrapdir_fds[i] != -1)
+          close (wrapdir_fds[i]);
       return status_socket;
     }
 
@@ -173,6 +176,9 @@ start_fuse_process (const char **wrapdirs,
     {
       const char *wrapdir = wrapdirs[i];
       int wrapdir_fd = wrapdir_fds[i];
+
+      if (wrapdir_fd == -1)
+        continue;
 
       int dev_fuse_fd = recv_fd (status_socket);
       if (dev_fuse_fd == -1)
@@ -370,6 +376,9 @@ groot_setup_ns (const char **wrapdirs, int num_wrapdirs)
         {
           const char *wrapdir = wrapdirs[i];
           int dev_fuse_fd;
+
+          if (wrapdir == NULL)
+            continue; // We failed to open the dir, ignore
 
           dev_fuse_fd = mount_fuse_fd_at (wrapdir);
 
