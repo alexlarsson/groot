@@ -435,7 +435,7 @@ groot_path_info_update_data (GRootPathInfo *info)
 static int
 grootfs_getattr (const char *path, struct stat *st_data)
 {
-  __debug__ (("getattr %s\n", path));
+  __debug__ (("getattr %s", path));
 
   int res;
   auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
@@ -451,7 +451,7 @@ grootfs_getattr (const char *path, struct stat *st_data)
 static int
 grootfs_fgetattr (const char *path, struct stat *st_data, struct fuse_file_info *fi)
 {
-  __debug__ (("fgetattr %s\n", path));
+  __debug__ (("fgetattr %s", path));
 
   int res;
   auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
@@ -467,7 +467,7 @@ grootfs_fgetattr (const char *path, struct stat *st_data, struct fuse_file_info 
 static int
 grootfs_chmod (const char *path, mode_t mode)
 {
-  __debug__ (("chmod %s %x\n", path, mode));
+  __debug__ (("chmod %s %x", path, mode));
 
   int res;
   auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
@@ -501,7 +501,7 @@ grootfs_chmod (const char *path, mode_t mode)
 static int
 grootfs_chown (const char *path, uid_t uid, gid_t gid)
 {
-  __debug__ (("chown %s to %d %d\n", path, uid, gid));
+  __debug__ (("chown %s to %d %d", path, uid, gid));
 
   int res;
   auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
@@ -534,7 +534,7 @@ grootfs_readlink (const char *path, char *buf, size_t size)
   GRootFS *fs = get_grootfs ();
   int r;
 
-  __debug__ (("readlink %s\n", path));
+  __debug__ (("readlink %s", path));
 
   path = ensure_relpath (path);
 
@@ -557,7 +557,7 @@ grootfs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
   struct dirent *de;
   int dfd;
 
-  __debug__ (("readdir %s\n", path));
+  __debug__ (("readdir %s", path));
 
   path = ensure_relpath (path);
 
@@ -602,7 +602,7 @@ grootfs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
 static int
 grootfs_mknod (const char *path, mode_t mode, dev_t rdev)
 {
-  __debug__ (("mknod %s %ld %ld\n", path, (long)mode, (long)rdev));
+  __debug__ (("mknod %s %ld %ld", path, (long)mode, (long)rdev));
   // TODO: Implement
   return -EROFS;
 }
@@ -610,7 +610,7 @@ grootfs_mknod (const char *path, mode_t mode, dev_t rdev)
 static int
 grootfs_mkdir (const char *path, mode_t mode)
 {
-  __debug__ (("mkdir %s %x\n", path, mode));
+  __debug__ (("mkdir %s %x", path, mode));
 
   int res;
   autofree char *basename = NULL;
@@ -643,7 +643,7 @@ grootfs_mkdir (const char *path, mode_t mode)
 static int
 grootfs_unlink (const char *path)
 {
-  __debug__ (("unlink %s\n", path));
+  __debug__ (("unlink %s", path));
 
   int res;
   auto(GRootPathInfo) info = GROOT_PATH_INFO_INIT;
@@ -670,7 +670,7 @@ grootfs_rmdir (const char *path)
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("rmdir %s\n", path));
+  __debug__ (("rmdir %s", path));
   path = ensure_relpath (path);
 
   if (unlinkat (fs->basefd, path, AT_REMOVEDIR) == -1)
@@ -684,7 +684,7 @@ grootfs_symlink (const char *from, const char *to)
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("symlink  %s %s\n", from, to));
+  __debug__ (("symlink  %s %s", from, to));
   to = ensure_relpath (to);
 
   if (symlinkat (from, fs->basefd, to) == -1)
@@ -711,7 +711,7 @@ grootfs_rename (const char *from, const char *to)
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("rename %s %s\n", from, to));
+  __debug__ (("rename %s %s", from, to));
   from = ensure_relpath (from);
   to = ensure_relpath (to);
 
@@ -726,7 +726,7 @@ grootfs_link (const char *from, const char *to)
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("link %s %s\n", from, to));
+  __debug__ (("link %s %s", from, to));
   from = ensure_relpath (from);
   to = ensure_relpath (to);
 
@@ -741,7 +741,7 @@ grootfs_truncate (const char *path, off_t size)
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("truncate %s\n", path));
+  __debug__ (("truncate %s", path));
   path = ensure_relpath (path);
 
   autofd int fd = openat (fs->basefd, path, O_NOFOLLOW|O_WRONLY);
@@ -757,7 +757,7 @@ grootfs_truncate (const char *path, off_t size)
 static int
 grootfs_ftruncate (const char *path, off_t size, struct fuse_file_info *fi)
 {
-  __debug__ (("ftruncate %s\n", path));
+  __debug__ (("ftruncate %s", path));
 
   if (ftruncate (fi->fh, size) == -1)
     return -errno;
@@ -770,7 +770,7 @@ grootfs_utimens (const char *path, const struct timespec tv[2])
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("utimens %s\n", path));
+  __debug__ (("utimens %s", path));
   path = ensure_relpath (path);
 
   if (utimensat (fs->basefd, path, tv, AT_SYMLINK_NOFOLLOW) == -1)
@@ -841,14 +841,14 @@ do_open (const char *path, mode_t mode, struct fuse_file_info *finfo)
 static int
 grootfs_open (const char *path, struct fuse_file_info *finfo)
 {
-  __debug__ (("open %s\n", path));
+  __debug__ (("open %s", path));
   return do_open (path, 0, finfo);
 }
 
 static int
 grootfs_create(const char *path, mode_t mode, struct fuse_file_info *finfo)
 {
-  __debug__ (("create %s\n", path));
+  __debug__ (("create %s", path));
   return do_open (path, mode, finfo);
 }
 
@@ -908,7 +908,7 @@ grootfs_access (const char *path, int mode)
 {
   GRootFS *fs = get_grootfs ();
 
-  __debug__ (("access %s\n", path));
+  __debug__ (("access %s", path));
   path = ensure_relpath (path);
 
   // TODO: Rewrite path for fake devnodes, etc
@@ -927,7 +927,7 @@ static int
 grootfs_setxattr (const char *path, const char *name, const char *value,
                    size_t size, int flags)
 {
-  __debug__ (("setxattr %s %s\n", path, name));
+  __debug__ (("setxattr %s %s", path, name));
 
   autofree char *basename = NULL;
   autofd int dirfd = open_parent_dirfd (path, &basename);
@@ -947,7 +947,7 @@ static int
 grootfs_getxattr (const char *path, const char *name, char *value,
                    size_t size)
 {
-  __debug__ (("getxattr %s %s\n", path, name));
+  __debug__ (("getxattr %s %s", path, name));
 
   autofree char *basename = NULL;
   autofd int dirfd = open_parent_dirfd (path, &basename);
@@ -969,7 +969,7 @@ grootfs_getxattr (const char *path, const char *name, char *value,
 static int
 grootfs_listxattr (const char *path, char *list, size_t size)
 {
-  __debug__ (("listxattr %s\n", path));
+  __debug__ (("listxattr %s", path));
 
   autofree char *basename = NULL;
   autofd int dirfd = open_parent_dirfd (path, &basename);
@@ -1053,7 +1053,7 @@ grootfs_listxattr (const char *path, char *list, size_t size)
 static int
 grootfs_removexattr (const char *path, const char *name)
 {
-  __debug__ (("removexattr %s %s\n", path, name));
+  __debug__ (("removexattr %s %s", path, name));
 
   autofree char *basename = NULL;
   autofd int dirfd = open_parent_dirfd (path, &basename);
@@ -1225,7 +1225,7 @@ static struct fuse_session *fuse_instance;
 static void
 exit_handler (int sig)
 {
-  __debug__ (("grootfs got signal %d\n", sig));
+  __debug__ (("grootfs got signal %d", sig));
 
   (void) sig;
   if (fuse_instance)
@@ -1343,7 +1343,7 @@ start_grootfs_lowlevel (int dirfd,
 
   fuse_destroy (fuse);
 
-  __debug__ (("exiting grootfs\n"));
+  __debug__ (("exiting grootfs"));
 
   exit (0);
 }
