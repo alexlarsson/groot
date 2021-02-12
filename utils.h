@@ -34,8 +34,20 @@
 #define FALSE 0
 typedef int bool;
 
+static inline void
+debuglog (const char *format, ...)
+{
+  va_list args;
+
+  fprintf (stderr, "groot: ");
+
+  va_start (args, format);
+  vfprintf (stderr, format, args);
+  va_end (args);
+}
+
 #ifdef DEBUGLOG
-#define __debug__(x) printf x
+#define __debug__(x) debuglog x
 #else
 #define __debug__(x)
 #endif
