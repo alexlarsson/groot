@@ -61,6 +61,7 @@ _groot_init_main (int argc, char *argv[])
         }
     }
 
+  __debug__(("Enabling grootfs for %s - wrap %s", argv[0], env_wrap));
 
   groot_setup_ns ((const char **)wrapdirs, num_wrapdirs);
   strfreev (wrapdirs);
