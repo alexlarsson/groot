@@ -28,13 +28,15 @@
 
 enum {
   KEY_HELP,
-  KEY_WRAP
+  KEY_WRAP,
+  KEY_DEBUG
 };
 
 
 struct groot_config {
   char **wrapdirs;
   int num_wrapdirs;
+  bool debug;
 };
 
 static void
@@ -46,6 +48,7 @@ usage (const char *progname)
            "options:\n"
            "   -h  --help          print help\n"
            "   -w DIR              wrap directory\n"
+           "   -d                  log debug info\n"
            "\n", progname);
 }
 
@@ -86,6 +89,10 @@ groot_opt_proc (void *data,
       add_wrap_dir (conf, arg + 2);
       return 0;
 
+    case KEY_DEBUG:
+      conf->debug = TRUE;
+      return 0;
+
     default:
       fprintf (stderr, "see `%s -h' for usage\n", outargs->argv[0]);
       exit (EXIT_FAILURE);
@@ -102,6 +109,7 @@ static struct fuse_opt groot_opts[] = {
   FUSE_OPT_KEY ("-h", KEY_HELP),
   FUSE_OPT_KEY ("--help", KEY_HELP),
   FUSE_OPT_KEY ("-w ", KEY_WRAP),
+  FUSE_OPT_KEY ("-d", KEY_DEBUG),
   FUSE_OPT_END
 };
 
@@ -141,6 +149,9 @@ main (int argc, char *argv[])
           add_wrap_dir (&conf, path);
         }
     }
+
+  if (conf.debug)
+    enable_debuglog ();
 
   groot_setup_ns ((const char **)conf.wrapdirs, conf.num_wrapdirs);
 

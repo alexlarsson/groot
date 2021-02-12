@@ -29,6 +29,7 @@ __unsetenv (const char *name)
 static void
 _groot_init_main (int argc, char *argv[])
 {
+  const char *debug = NULL;
   const char *env_wrap = NULL;
   const char *disabled = NULL;
   char **wrapdirs = NULL;
@@ -36,6 +37,7 @@ _groot_init_main (int argc, char *argv[])
 
   disabled = getenv ("GROOT_DISABLED");
   env_wrap = getenv ("GROOT_WRAPFS");
+  debug = getenv ("GROOT_DEBUG");
 
   /* Don't recursively enable groot */
   __unsetenv ("LD_PRELOAD");
@@ -60,6 +62,9 @@ _groot_init_main (int argc, char *argv[])
           wrapdirs[num_wrapdirs-1] = xstrdup (path);
         }
     }
+
+  if (debug)
+    enable_debuglog ();
 
   __debug__(("Enabling grootfs for %s - wrap %s", argv[0], env_wrap));
 

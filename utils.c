@@ -23,6 +23,32 @@
 
 #include <sys/socket.h>
 
+static bool debuglog_enabled = FALSE;
+
+void
+enable_debuglog (void)
+{
+  debuglog_enabled = TRUE;
+}
+
+void
+debuglog (const char *format, ...)
+{
+  va_list args;
+
+  if (!debuglog_enabled)
+    return;
+
+  fprintf (stderr, "groot: ");
+
+  va_start (args, format);
+  vfprintf (stderr, format, args);
+  va_end (args);
+
+  fprintf (stderr, "\n");
+}
+
+
 void
 report (const char *format, ...)
 {

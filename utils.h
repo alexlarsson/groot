@@ -34,21 +34,7 @@
 #define FALSE 0
 typedef int bool;
 
-static inline void
-debuglog (const char *format, ...)
-{
-  va_list args;
-
-  fprintf (stderr, "groot: ");
-
-  va_start (args, format);
-  vfprintf (stderr, format, args);
-  va_end (args);
-
-  fprintf (stderr, "\n");
-}
-
-#ifdef DEBUGLOG
+#if 1
 #define __debug__(x) debuglog x
 #else
 #define __debug__(x)
@@ -64,6 +50,9 @@ void   die            (const char  *format,
                        ...);
 void   report         (const char  *format,
                        ...);
+void   debuglog       (const char  *format,
+                       ...);
+void   enable_debuglog (void);
 void   die_oom        (void);
 void * xmalloc        (size_t       size);
 void * xcalloc        (size_t       size);
