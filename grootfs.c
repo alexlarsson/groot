@@ -1331,7 +1331,8 @@ start_grootfs_lowlevel (int dirfd,
 
   set_signal_handlers (fuse_get_session (fuse));
 
-  (void) write (status_pipes[1], &pipe_buf, 1);
+  if (write (status_pipes[1], &pipe_buf, 1) < 0)
+    report ("Failed write to status pipe");
 
   res = fuse_loop (fuse);
 

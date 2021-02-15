@@ -135,7 +135,8 @@ start_uidmap_process (pid_t main_pid,
       launch_newidmap ("newgidmap", gid_mapping, main_pid);
 
       /* Signal that uidmaps are set up */
-      (void) write (status_socket, &buf, 1);
+      if (write (status_socket, &buf, 1) < 0)
+        report ("Failed write to status pipe");
     }
 
   exit (0);
