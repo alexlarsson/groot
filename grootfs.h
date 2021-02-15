@@ -24,5 +24,6 @@ int start_grootfs          (int         argc,
                             int         dirfd);
 int start_grootfs_lowlevel (int         dirfd,
                             int         dev_fuse,
-                            const char *mountpoint);
-
+                            const char *mountpoint,
+                            long        max_uid,
+                            long        max_gid);

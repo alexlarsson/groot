@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <fuse.h>
 #include <fuse_lowlevel.h>
+#include <limits.h>
 #include <signal.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
@@ -40,6 +41,8 @@
 
 typedef struct {
   int basefd;
+  long max_uid;
+  long max_gid;
 } GRootFS;
 
 #define ST_MODE_PERM_MASK (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX)
@@ -172,6 +175,8 @@ static void
 apply_fake_data (struct stat *st_data,
                  const GRootFSData *data)
 {
+  GRootFS *fs = get_grootfs ();
+
   if (data->flags & GROOTFS_FLAGS_UID_SET)
     st_data->st_uid = data->uid;
 
@@ -180,6 +185,14 @@ apply_fake_data (struct stat *st_data,
 
   if (data->flags & GROOTFS_FLAGS_MODE_SET)
     st_data->st_mode = (st_data->st_mode & (~ST_MODE_PERM_MASK)) | (data->mode & ST_MODE_PERM_MASK);
+
+  /* Don't expose nobody user or other weird things not useful in the namespace */
+
+  if (st_data->st_uid > fs->max_uid)
+    st_data->st_uid = 0;
+
+  if (st_data->st_gid > fs->max_gid)
+    st_data->st_gid = 0;
 }
 
 static int
@@ -1121,17 +1134,23 @@ struct fuse_operations grootfs_oper = {
 };
 
 static GRootFS *
-new_grootfs (int basefd)
+new_grootfs (int basefd,
+             long max_uid,
+             long max_gid)
 {
   GRootFS *fs = xmalloc (sizeof (GRootFS));
   fs->basefd = basefd;
+  fs->max_uid = max_uid;
+  fs->max_gid = max_gid;
   return fs;
 }
 
 int
-start_grootfs (int argc, char *argv[], int dirfd)
+start_grootfs (int argc,
+               char *argv[],
+               int dirfd)
 {
-  GRootFS *fs = new_grootfs (dirfd);
+  GRootFS *fs = new_grootfs (dirfd, LONG_MAX, LONG_MAX);
 
   return fuse_main (argc, argv, &grootfs_oper, fs);
 }
@@ -1266,7 +1285,9 @@ set_signal_handlers (struct fuse_session *se)
 int
 start_grootfs_lowlevel (int dirfd,
                         int dev_fuse,
-                        const char *mountpoint)
+                        const char *mountpoint,
+                        long max_uid,
+                        long max_gid)
 {
   const char *argv[] = { mountpoint };
   struct fuse_args args = FUSE_ARGS_INIT(N_ELEMENTS (argv), (char **)argv);
@@ -1326,7 +1347,7 @@ start_grootfs_lowlevel (int dirfd,
   if (ch == NULL)
     die ("Unable to create fuse channel");
 
-  GRootFS *fs = new_grootfs (dirfd);
+  GRootFS *fs = new_grootfs (dirfd, max_uid, max_gid);
   struct fuse *fuse = fuse_new (ch, &args, &grootfs_oper, sizeof (grootfs_oper), fs);
 
   set_signal_handlers (fuse_get_session (fuse));

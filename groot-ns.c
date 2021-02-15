@@ -144,7 +144,9 @@ start_uidmap_process (pid_t main_pid,
 
 static int
 start_fuse_process (const char **wrapdirs,
-                    int num_wrapdirs)
+                    int num_wrapdirs,
+                    long max_uid,
+                    long max_gid)
 {
   char buf = 'x';
   int status_socket;
@@ -185,7 +187,7 @@ start_fuse_process (const char **wrapdirs,
       if (dev_fuse_fd == -1)
         die_with_error ("no /dev/fuse fd recieved");
 
-      if (start_grootfs_lowlevel (wrapdir_fd, dev_fuse_fd, wrapdir) != 0)
+      if (start_grootfs_lowlevel (wrapdir_fd, dev_fuse_fd, wrapdir, max_uid, max_gid) != 0)
         die ("start_grootfs_lowlevel");
     }
 
@@ -226,7 +228,7 @@ keep_caps (void)
 }
 
 static char **
-make_idmap (const char *username, const char *filename, long base_id)
+make_idmap (const char *username, const char *filename, long base_id, long *max_id)
 {
   autofree char *content = NULL;
   autofreev char **mapping = NULL;
@@ -289,6 +291,8 @@ make_idmap (const char *username, const char *filename, long base_id)
   if (next_id == 1)
     report ("Warning: no defined ids for user %s in %s, limited user/group support", username, filename);
 
+  *max_id = next_id - 1;
+
   return steal_pointer (&mapping);
 }
 
@@ -327,6 +331,7 @@ groot_setup_ns (const char **wrapdirs, int num_wrapdirs)
   uid_t real_uid;
   gid_t real_gid;
   pid_t main_pid;
+  long max_uid, max_gid;
   int res;
   char buf = 'x';
 
@@ -344,11 +349,11 @@ groot_setup_ns (const char **wrapdirs, int num_wrapdirs)
         username = xstrdup (passwd->pw_name);
     }
 
-  uid_mapping = make_idmap (username, "/etc/subuid", real_uid);
-  gid_mapping = make_idmap (username, "/etc/subgid", real_gid);
+  uid_mapping = make_idmap (username, "/etc/subuid", real_uid, &max_uid);
+  gid_mapping = make_idmap (username, "/etc/subgid", real_gid, &max_gid);
 
   if (num_wrapdirs > 0)
-    fuse_status_socket = start_fuse_process (wrapdirs, num_wrapdirs);
+    fuse_status_socket = start_fuse_process (wrapdirs, num_wrapdirs, max_uid, max_gid);
 
   uidmap_status_socket = start_uidmap_process (main_pid, uid_mapping, gid_mapping);
 
