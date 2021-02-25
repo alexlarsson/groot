@@ -1028,7 +1028,7 @@ grootfs_listxattr (const char *path, char *list, size_t size)
   while (real_list < real_list_end)
     {
       const char *name = real_list;
-      real_list = real_list + strlen (name);
+      real_list = real_list + strlen (name) + 1;
 
       if (has_prefix (name, "user.grootfs."))
         {
@@ -1047,7 +1047,7 @@ grootfs_listxattr (const char *path, char *list, size_t size)
   while (real_list < real_list_end)
     {
       const char *name = real_list;
-      real_list = real_list + strlen (name);
+      real_list = real_list + strlen (name) + 1;
 
       if (has_prefix (name, "user.grootfs."))
         {
