@@ -1001,7 +1001,7 @@ grootfs_listxattr (const char *path, char *list, size_t size)
   while (1)
     {
       res = llistxattr (proc_file, buf, buf_size);
-      if (res != 0)
+      if (res < 0)
         {
           int errsv = errno;
 
