@@ -1035,7 +1035,7 @@ grootfs_listxattr (const char *path, char *list, size_t size)
       if (has_prefix (name, GROOT_CUSTOM_XATTR_PREFIX))
         {
           name = name + strlen (GROOT_CUSTOM_XATTR_PREFIX);
-          fake_size += strlen (name + 1);
+          fake_size += strlen (name) + 1;
         }
     }
 
