@@ -46,6 +46,8 @@ typedef struct {
 } GRootFS;
 
 #define ST_MODE_PERM_MASK (S_IRWXU | S_IRWXG | S_IRWXO | S_ISUID | S_ISGID | S_ISVTX)
+#define GROOT_CUSTOM_XATTR_PREFIX "user.grootfs."
+#define GROOT_DATA_XATTR "user.grootfs"
 
 static GRootFS *
 get_grootfs (void)
@@ -948,7 +950,7 @@ grootfs_setxattr (const char *path, const char *name, const char *value,
     return dirfd;
 
   autofree char *proc_file = get_proc_fd_path (dirfd, basename);
-  autofree char *fake_name = xasprintf ("user.grootfs.%s", name);
+  autofree char *fake_name = xasprintf (GROOT_CUSTOM_XATTR_PREFIX"%s", name);
 
   if (lsetxattr (proc_file, fake_name, value, size, flags) != 0)
     return -errno;
@@ -968,7 +970,7 @@ grootfs_getxattr (const char *path, const char *name, char *value,
     return dirfd;
 
   autofree char *proc_file = get_proc_fd_path (dirfd, basename);
-  autofree char *fake_name = xasprintf ("user.grootfs.%s", name);
+  autofree char *fake_name = xasprintf (GROOT_CUSTOM_XATTR_PREFIX"%s", name);
 
   if (lgetxattr (proc_file, fake_name, value, size) != 0)
     return -errno;
@@ -1030,9 +1032,9 @@ grootfs_listxattr (const char *path, char *list, size_t size)
       const char *name = real_list;
       real_list = real_list + strlen (name) + 1;
 
-      if (has_prefix (name, "user.grootfs."))
+      if (has_prefix (name, GROOT_CUSTOM_XATTR_PREFIX))
         {
-          name = name + strlen ("user.grootfs.");
+          name = name + strlen (GROOT_CUSTOM_XATTR_PREFIX);
           fake_size += strlen (name + 1);
         }
     }
@@ -1049,9 +1051,9 @@ grootfs_listxattr (const char *path, char *list, size_t size)
       const char *name = real_list;
       real_list = real_list + strlen (name) + 1;
 
-      if (has_prefix (name, "user.grootfs."))
+      if (has_prefix (name, GROOT_CUSTOM_XATTR_PREFIX))
         {
-          name = name + strlen ("user.grootfs.");
+          name = name + strlen (GROOT_CUSTOM_XATTR_PREFIX);
           memcpy (list, name, strlen (name) + 1);
           list += strlen (name) + 1;
         }
@@ -1074,7 +1076,7 @@ grootfs_removexattr (const char *path, const char *name)
     return dirfd;
 
   autofree char *proc_file = get_proc_fd_path (dirfd, basename);
-  autofree char *fake_name = xasprintf ("user.grootfs.%s", name);
+  autofree char *fake_name = xasprintf (GROOT_CUSTOM_XATTR_PREFIX"%s", name);
 
   if (lremovexattr (proc_file, fake_name) != 0)
     return -errno;
