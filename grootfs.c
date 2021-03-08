@@ -966,16 +966,18 @@ grootfs_getxattr (const char *path, const char *name, char *value,
 
   autofree char *basename = NULL;
   autofd int dirfd = open_parent_dirfd (path, &basename);
+  ssize_t res;
   if (dirfd < 0)
     return dirfd;
 
   autofree char *proc_file = get_proc_fd_path (dirfd, basename);
   autofree char *fake_name = xasprintf (GROOT_CUSTOM_XATTR_PREFIX"%s", name);
 
-  if (lgetxattr (proc_file, fake_name, value, size) != 0)
+  res = lgetxattr (proc_file, fake_name, value, size);
+  if (res == -1)
     return -errno;
 
-  return 0;
+  return res;
 }
 
 /*
